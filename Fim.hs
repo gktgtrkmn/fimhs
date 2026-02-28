@@ -1,4 +1,5 @@
-import Control.Monad (forM)
+import Control.Concurrent (threadDelay)
+import Control.Monad (forM, unless)
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Time.Clock (UTCTime)
@@ -56,6 +57,18 @@ buildSnapshot dir = do
     return (f, FileMeta s t)
   return $ Map.fromList metaList
 
+watchLoop :: FilePath -> Snapshot -> IO ()
+watchLoop dir currentSnap = do
+  threadDelay 3000000
+  newSnap <- buildSnapshot dir
+  let diff = compareSnapshots currentSnap newSnap
+  unless (Map.null diff) $ do
+    putStrLn "\n[!] Real Time Alert - Tampering Detected:"
+    mapM_ (\(path, alert) -> putStrLn $ "  [" ++ show alert ++ "] " ++ path) (Map.toList diff)
+    putStrLn "----------------"
+    putStrLn "[*] Baseline updated. Resuming watch..."
+  watchLoop dir newSnap
+
 main :: IO ()
 main = do
   args <- getArgs
@@ -80,4 +93,9 @@ main = do
             else do
               putStrLn "[!] Alerts - Tampering Detected:"
               mapM_ (\(path, alert) -> putStrLn $ "   [" ++ show alert ++ "] " ++ path) (Map.toList diff)
+    ["watch", dir] -> do
+      putStrLn $ "[*] Starting watchin for '" ++ dir ++ "'..."
+      putStrLn "[*] Press Ctrl-C to stop."
+      initialSnap <- buildSnapshot dir
+      watchLoop dir initialSnap
     _ -> die "Usage: runhaskell Fim.hs [init|check] <directory>"
