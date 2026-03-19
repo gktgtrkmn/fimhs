@@ -1,7 +1,8 @@
 use std::collections::BTreeMap;
 use std::time::SystemTime;
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FileMeta {
     pub size: u64,
     pub modified: SystemTime,
@@ -17,7 +18,7 @@ pub enum Alert {
 }
 
 pub fn compare_snapshots(old: &Snapshot, new: &Snapshot) -> BTreeMap<String, Alert> {
-    let mut diffs = BTreeMap::new();
+    let mut diffs: BTreeMap<String, Alert> = BTreeMap::new();
 
     for path in new.keys().filter(|k| !old.contains_key(*k)) {
         diffs.insert(path.clone(), Alert::Added);
@@ -44,10 +45,10 @@ mod tests {
 
     #[test]
     fn test_compare_snapshots() {
-        let mut old = Snapshot::new();
-        let mut new = Snapshot::new();
+        let mut old: BTreeMap<String, FileMeta> = Snapshot::new();
+        let mut new: BTreeMap<String, FileMeta> = Snapshot::new();
 
-        let base_time = SystemTime::UNIX_EPOCH;
+        let base_time: SystemTime = SystemTime::UNIX_EPOCH;
 
         old.insert(
             "file_a.txt".into(),
@@ -95,7 +96,7 @@ mod tests {
             },
         );
 
-        let diffs = compare_snapshots(&old, &new);
+        let diffs: BTreeMap<String, Alert> = compare_snapshots(&old, &new);
 
         assert_eq!(diffs.len(), 3);
         assert_eq!(diffs.get("file_b.txt"), Some(&Alert::Modified));
