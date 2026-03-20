@@ -48,11 +48,13 @@ fn visit_dirs(dir: &Path, snapshot: &mut Snapshot) -> std::io::Result<()> {
                 let size: u64 = metadata.len();
                 let modified: std::time::SystemTime = metadata.modified()?;
 
-                if let Some(path_str) = path.to_str() {
-                    snapshot.insert(
-                        path_str.to_string(),
-                        FileMeta { size, modified },
-                    );
+                if let Ok(canonical_path) = fs::canonicalize(&path) {
+                    if let Some(path_str) = canonical_path.to_str() {
+                        snapshot.insert(
+                            path_str.to_string(),
+                            FileMeta { size, modified },
+                        );
+                    }
                 }
             }
         }
