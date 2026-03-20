@@ -1,5 +1,5 @@
 use clap::{Parser, Subcommand};
-use core::{compare_snapshots, FileMeta, Snapshot};
+use fim_core::{compare_snapshots, FileMeta, Snapshot};
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
@@ -87,7 +87,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let old_snap: Snapshot = serde_json::from_str(&data)?;
 
             let new_snap: BTreeMap<String, FileMeta> = build_snapshot(dir)?;
-            let diff: BTreeMap<String, core::Alert> = compare_snapshots(&old_snap, &new_snap);
+            let diff: BTreeMap<String, fim_core::Alert> = compare_snapshots(&old_snap, &new_snap);
 
             if diff.is_empty() {
                 println!("[+] Integrity check passed: No unauthorized changes.");

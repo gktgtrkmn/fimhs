@@ -3,5 +3,5 @@ resolver = "3"
 members = [
   "core",
   "agent",
-  "tui"
+  "gui/src-tauri"
 ]
