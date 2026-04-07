@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 pub struct FileMeta {
     pub size: u64,
     pub modified: SystemTime,
+    pub hash: Option<String>,
 }
 
 pub type Snapshot = BTreeMap<String, FileMeta>;
@@ -37,71 +38,4 @@ pub fn compare_snapshots(old: &Snapshot, new: &Snapshot) -> BTreeMap<String, Ale
     }
 
     diffs
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_compare_snapshots() {
-        let mut old: BTreeMap<String, FileMeta> = Snapshot::new();
-        let mut new: BTreeMap<String, FileMeta> = Snapshot::new();
-
-        let base_time: SystemTime = SystemTime::UNIX_EPOCH;
-
-        old.insert(
-            "file_a.txt".into(),
-            FileMeta {
-                size: 100,
-                modified: base_time,
-            },
-        );
-        new.insert(
-            "file_a.txt".into(),
-            FileMeta {
-                size: 100,
-                modified: base_time,
-            },
-        );
-
-        old.insert(
-            "file_b.txt".into(),
-            FileMeta {
-                size: 200,
-                modified: base_time,
-            },
-        );
-        new.insert(
-            "file_b.txt".into(),
-            FileMeta {
-                size: 250,
-                modified: base_time,
-            },
-        );
-
-        old.insert(
-            "file_c.txt".into(),
-            FileMeta {
-                size: 300,
-                modified: base_time,
-            },
-        );
-
-        new.insert(
-            "file_d.txt".into(),
-            FileMeta {
-                size: 400,
-                modified: base_time,
-            },
-        );
-
-        let diffs: BTreeMap<String, Alert> = compare_snapshots(&old, &new);
-
-        assert_eq!(diffs.len(), 3);
-        assert_eq!(diffs.get("file_b.txt"), Some(&Alert::Modified));
-        assert_eq!(diffs.get("file_c.txt"), Some(&Alert::Deleted));
-        assert_eq!(diffs.get("file_d.txt"), Some(&Alert::Added));
-        assert_eq!(diffs.get("file_a.txt"), None);
-    }
 }

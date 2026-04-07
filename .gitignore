@@ -10,3 +10,4 @@
 *.o
 /haskell_old_src/bin/
 
+.fim_snapshot.json
