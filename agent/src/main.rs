@@ -6,6 +6,9 @@ use std::path::Path;
 
 const SNAPSHOT_FILE: &str = ".fim_snapshot.json";
 
+use jwalk::WalkDir;
+use rayon::prelude::*;
+
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 struct Cli {
@@ -24,42 +27,29 @@ enum Command {
 }
 
 fn build_snapshot<P: AsRef<Path>>(dir: P) -> std::io::Result<Snapshot> {
-    let mut snapshot: BTreeMap<String, FileMeta> = Snapshot::new();
-    visit_dirs(dir.as_ref(), &mut snapshot)?;
+    let snapshot: Snapshot = WalkDir::new(dir)
+        .skip_hidden(false)
+        .into_iter()
+        .filter_map(Result::ok)
+        .filter(|entry| entry.file_type().is_file())
+        .filter(|entry| entry.file_name() != SNAPSHOT_FILE)
+        .par_bridge()
+        .filter_map(|entry| {
+            let path = entry.path();
+            let canonical_path = fs::canonicalize(&path).ok()?;
+            let path_str = canonical_path.to_str()?.to_string();
+
+            let metadata = entry.metadata().ok()?;
+            let size = metadata.len();
+            let modified = metadata.modified().ok()?;
+
+            Some((
+                path_str,
+                FileMeta { size, modified },
+            ))        
+        })
+        .collect();
     Ok(snapshot)
-}
-
-fn visit_dirs(dir: &Path, snapshot: &mut Snapshot) -> std::io::Result<()> {
-    if dir.is_dir() {
-        for entry in fs::read_dir(dir)? {
-            let entry: fs::DirEntry = entry?;
-            let path: std::path::PathBuf = entry.path();
-
-            if let Some(file_name) = path.file_name() {
-                if file_name == SNAPSHOT_FILE {
-                    continue;
-                }
-            }
-
-            if path.is_dir() {
-                visit_dirs(&path, snapshot)?;
-            } else {
-                let metadata: fs::Metadata = entry.metadata()?;
-                let size: u64 = metadata.len();
-                let modified: std::time::SystemTime = metadata.modified()?;
-
-                if let Ok(canonical_path) = fs::canonicalize(&path) {
-                    if let Some(path_str) = canonical_path.to_str() {
-                        snapshot.insert(
-                            path_str.to_string(),
-                            FileMeta { size, modified },
-                        );
-                    }
-                }
-            }
-        }
-    }
-    Ok(())
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
