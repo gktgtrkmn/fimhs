@@ -7,8 +7,9 @@ use std::path::Path;
 
 use jwalk::WalkDir;
 use rayon::prelude::*;
-use tracing::{Level, debug, error, info, info_span, warn};
-use tracing_subscriber::{EnvFilter, FmtSubscriber};
+use tracing::{debug, error, info, info_span, warn};
+use tracing_appender::rolling;
+use tracing_subscriber::{EnvFilter, fmt, layer::SubscriberExt, util::SubscriberInitExt};
 
 const SNAPSHOT_FILE: &str = ".fim_snapshot.json";
 
@@ -25,14 +26,27 @@ enum Command {
     Check { dir: String },
 }
 
-fn init_logging() {
-    let sub = FmtSubscriber::builder()
-        .with_env_filter(EnvFilter::from_default_env().add_directive(Level::INFO.into()))
-        .compact()
-        .with_thread_ids(true)
-        .finish();
+fn init_logging() -> tracing_appender::non_blocking::WorkerGuard {
+    let file_appender = rolling::daily("logs", "fim.log");
 
-    tracing::subscriber::set_global_default(sub).expect("Failed to initialzie logging")
+    let (non_blocking_writer, guard) = tracing_appender::non_blocking(file_appender);
+
+    let console_layer = fmt::layer().compact().with_thread_ids(true);
+
+    let file_layer = fmt::layer()
+        .with_writer(non_blocking_writer)
+        .with_ansi(false)
+        .with_thread_ids(true);
+
+    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
+
+    tracing_subscriber::registry()
+        .with(filter)
+        .with(console_layer)
+        .with(file_layer)
+        .init();
+
+    guard
 }
 
 fn compute_blake3(filepath: &str) -> io::Result<String> {
@@ -53,15 +67,16 @@ fn build_snapshot<P: AsRef<Path>>(dir: P) -> std::io::Result<Snapshot> {
         .filter_map(|entry| {
             let path: std::path::PathBuf = entry.path();
 
-            let _span = info_span!("process_file", path = ?path).entered();
-            let canonical_path: std::path::PathBuf = match fs::canonicalize(&path) {
+            let canonical_path: std::path::PathBuf = match dunce::canonicalize(&path) {
                 Ok(p) => p,
                 Err(e) => {
-                    debug!(error = ?e, "Failed to canonicalize path");
+                    debug!(error = ?e, path = %path.display(), "Failed to canonicalize path");
                     return None;
                 }
             };
             let path_str: String = canonical_path.to_str()?.to_string();
+
+            let _span = info_span!("process_file", path = %path_str).entered();
 
             let metadata: fs::Metadata = match entry.metadata() {
                 Ok(m) => m,
@@ -104,7 +119,7 @@ fn build_snapshot<P: AsRef<Path>>(dir: P) -> std::io::Result<Snapshot> {
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    init_logging();
+    let _guard = init_logging();
 
     let cli: Cli = Cli::parse();
 
