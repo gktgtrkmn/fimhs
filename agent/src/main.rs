@@ -7,7 +7,7 @@ use std::path::Path;
 
 use jwalk::WalkDir;
 use rayon::prelude::*;
-use tracing::{debug, error, info, info_span, warn};
+use tracing::{debug, debug_span, error, info, warn};
 use tracing_appender::rolling;
 use tracing_subscriber::{EnvFilter, fmt, layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -49,10 +49,14 @@ fn init_logging() -> tracing_appender::non_blocking::WorkerGuard {
     guard
 }
 
-fn compute_blake3(filepath: &str) -> io::Result<String> {
-    let mut file: File = File::open(filepath)?;
+fn compute_blake3(filepath: &str, size: u64) -> io::Result<String> {
     let mut hasher: blake3::Hasher = blake3::Hasher::new();
-    io::copy(&mut file, &mut hasher)?;
+    if size > 16 * 1024 * 1024 {
+        hasher.update_mmap_rayon(filepath)?;
+    } else {
+        let file = File::open(filepath)?;
+        hasher.update_reader(file)?;
+    }
     Ok(hasher.finalize().to_hex().to_string())
 }
 
@@ -76,7 +80,7 @@ fn build_snapshot<P: AsRef<Path>>(dir: P) -> std::io::Result<Snapshot> {
             };
             let path_str: String = canonical_path.to_str()?.to_string();
 
-            let _span = info_span!("process_file", path = %path_str).entered();
+            let _span = debug_span!("process_file", path = %path_str).entered();
 
             let metadata: fs::Metadata = match entry.metadata() {
                 Ok(m) => m,
@@ -96,7 +100,7 @@ fn build_snapshot<P: AsRef<Path>>(dir: P) -> std::io::Result<Snapshot> {
             };
 
             debug!("Computing hash...");
-            let hash: Option<String> = match compute_blake3(&path_str) {
+            let hash: Option<String> = match compute_blake3(&path_str, size) {
                 Ok(h) => Some(h),
                 Err(e) => {
                     warn!(error = ?e, "Failed to compute hash, skipping hash field");
