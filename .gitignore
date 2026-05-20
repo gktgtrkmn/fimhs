@@ -12,3 +12,5 @@
 
 .fim_snapshot.json
 /logs/
+
+.direnv/
